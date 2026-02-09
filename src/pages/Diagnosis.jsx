@@ -21,13 +21,15 @@ const Diagnosis = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   
   const [formData, setFormData] = useState({
-    basic: {
+    basicInfo: {  // Changed from 'basic' to 'basicInfo' for consistency
       fullName: '',
       age: '',
       gender: '',
       email: '',
+      phone: '',  
       weight: '',
-      height: ''
+      height: '',
+      dietPreference: 'non-vegetarian'  // Added default
     },
     lifestyle: {
       sleepHours: 7,
@@ -54,7 +56,8 @@ const Diagnosis = () => {
       ironRichFoods: true,
       fishOilOrNuts: 'yes',
       biotin: 'moderate',
-      supplements: []
+      supplements: [],
+      b12Intake: 'sometimes'  // Added for vegetarians
     },
     scalpImages: []
   });
@@ -64,6 +67,10 @@ const Diagnosis = () => {
       ...prev,
       [section]: { ...prev[section], ...data }
     }));
+    
+    // Debug log
+    console.log(`📝 Updated ${section}:`, data);
+    console.log('📊 Full formData:', { ...formData, [section]: { ...formData[section], ...data } });
   };
 
   const handleNext = () => {
@@ -104,15 +111,31 @@ const Diagnosis = () => {
   const renderStep = () => {
     switch (currentStep) {
       case 1:
-        return <BasicInfo data={formData.basic} onChange={(data) => updateFormData('basic', data)} />;
+        return <BasicInfo 
+          data={formData.basicInfo} 
+          onChange={(data) => updateFormData('basicInfo', data)} 
+        />;
       case 2:
-        return <LifestyleInfo data={formData.lifestyle} onChange={(data) => updateFormData('lifestyle', data)} />;
+        return <LifestyleInfo 
+          data={formData.lifestyle} 
+          onChange={(data) => updateFormData('lifestyle', data)} 
+        />;
       case 3:
-        return <HealthHistory data={formData.health} onChange={(data) => updateFormData('health', data)} />;
+        return <HealthHistory 
+          data={formData.health} 
+          onChange={(data) => updateFormData('health', data)} 
+        />;
       case 4:
-        return <DietInfo data={formData.diet} onChange={(data) => updateFormData('diet', data)} />;
+        return <DietInfo 
+          data={formData.diet} 
+          onChange={(data) => updateFormData('diet', data)}
+          formData={formData}  // ⬅️ FIXED: Added formData prop
+        />;
       case 5:
-        return <ScalpImages data={formData.scalpImages} onChange={(images) => updateFormData('scalpImages', images)} />;
+        return <ScalpImages 
+          data={formData.scalpImages} 
+          onChange={(images) => setFormData(prev => ({ ...prev, scalpImages: images }))}
+        />;
       case 6:
         return <Review formData={formData} />;
       default:
@@ -123,8 +146,14 @@ const Diagnosis = () => {
   const isStepValid = () => {
     switch (currentStep) {
       case 1:
-        return formData.basic.fullName && formData.basic.age && formData.basic.gender && 
-               formData.basic.email && formData.basic.weight && formData.basic.height;
+        return formData.basicInfo.fullName && 
+               formData.basicInfo.age && 
+               formData.basicInfo.gender && 
+               formData.basicInfo.email && 
+               formData.basicInfo.phone &&
+               formData.basicInfo.weight && 
+               formData.basicInfo.height &&
+               formData.basicInfo.dietPreference;  // Added diet preference validation
       case 2:
       case 3:
       case 4:

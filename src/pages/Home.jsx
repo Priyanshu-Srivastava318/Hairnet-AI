@@ -3,10 +3,37 @@ import { Link } from 'react-router-dom';
 import { Sparkles, Activity, TrendingUp, CheckCircle2, Brain, LineChart, Users } from 'lucide-react';
 
 const Home = () => {
+  const teamMembers = [
+    {
+      name: 'Priyanshu Srivastava',
+      role: 'ML Specialist & Backend Dev',
+      initials: 'PS',
+      image: null, // Add image path if available: 'Priyanshu.png'
+    },
+    {
+      name: 'Mitali Shandilya',
+      role: 'Team Leader & AI Engineer',
+      initials: 'MS',
+      image: null, // 'Mitali.png'
+    },
+    {
+      name: 'Niketa Sukhraliya',
+      role: 'Full Stack Developer',
+      initials: 'NS',
+      image: null, // 'Niketa.png'
+    },
+    {
+      name: 'Sahil Sharma',
+      role: 'UI/UX Designer & Documentation',
+      initials: 'SS',
+      image: null, // 'Sahil Sharma.png'
+    },
+  ];
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-950 via-slate-900 to-emerald-950">
       {/* Hero Section */}
-      <section className="relative overflow-hidden pt-32 pb-20 px-4 sm:px-6 lg:px-8">
+      <section className="relative overflow-hidden py-20 px-4 sm:px-6 lg:px-8">
         {/* Animated background elements */}
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute top-20 left-10 w-72 h-72 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
@@ -74,25 +101,26 @@ const Home = () => {
               </div>
             </motion.div>
 
-            {/* Right: Product Card */}
+            {/* Right: Product Card - SMALLER SIZE */}
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.8, delay: 0.2 }}
               className="relative"
             >
-              <div className="relative bg-gradient-to-br from-blue-900/40 to-emerald-900/40 backdrop-blur-sm rounded-3xl p-6 sm:p-8 border border-emerald-700/30 shadow-2xl">
-                <div className="aspect-square bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl overflow-hidden relative">
+              <div className="relative bg-gradient-to-br from-blue-900/40 to-emerald-900/40 backdrop-blur-sm rounded-3xl p-6 border border-emerald-700/30 shadow-2xl">
+                {/* REDUCED HEIGHT - was aspect-square, now fixed height */}
+                <div className="h-64 sm:h-80 bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl overflow-hidden relative">
                   {/* Gradient Overlay */}
                   <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 via-emerald-600/20 to-transparent"></div>
                   
                   {/* Content */}
-                  <div className="relative z-10 h-full flex flex-col items-center justify-center p-8 text-center">
-                    <div className="w-32 h-32 sm:w-40 sm:h-40 mb-6 bg-gradient-to-br from-blue-500/20 to-emerald-500/20 backdrop-blur-sm rounded-3xl flex items-center justify-center border border-emerald-500/30">
-                      <Sparkles size={64} className="text-emerald-400" />
+                  <div className="relative z-10 h-full flex flex-col items-center justify-center p-6 text-center">
+                    <div className="w-24 h-24 sm:w-32 sm:h-32 mb-4 bg-gradient-to-br from-blue-500/20 to-emerald-500/20 backdrop-blur-sm rounded-3xl flex items-center justify-center border border-emerald-500/30">
+                      <Sparkles size={48} className="text-emerald-400" />
                     </div>
-                    <h3 className="text-2xl sm:text-3xl font-bold text-white mb-3">AI Analysis</h3>
-                    <p className="text-gray-300 text-base sm:text-lg mb-6">
+                    <h3 className="text-xl sm:text-2xl font-bold text-white mb-2">AI Analysis</h3>
+                    <p className="text-gray-300 text-sm sm:text-base mb-4">
                       Personalized insights for your hair health
                     </p>
                     <div className="flex items-center gap-2 text-emerald-400 text-sm">
@@ -276,8 +304,73 @@ const Home = () => {
         </div>
       </section>
 
-      {/* How It Works Section */}
+      {/* Team Section */}
       <section className="py-20 px-4 sm:px-6 lg:px-8 bg-slate-900/50">
+        <div className="max-w-7xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-16"
+          >
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <Users className="w-10 h-10 text-emerald-400" />
+              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
+                Meet Our Team
+              </h2>
+            </div>
+            <p className="text-lg sm:text-xl text-gray-400 max-w-3xl mx-auto">
+              Passionate developers building the future of haircare
+            </p>
+          </motion.div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+            {teamMembers.map((member, index) => (
+              <motion.div
+                key={member.name}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: index * 0.1 }}
+                className="group relative bg-gradient-to-br from-blue-900/30 to-emerald-900/30 backdrop-blur-sm rounded-2xl p-6 border border-emerald-700/20 hover:border-emerald-500/50 transition-all duration-300 transform hover:-translate-y-2 hover:shadow-2xl hover:shadow-emerald-500/20"
+              >
+                {/* Avatar */}
+                <div className="relative mb-4">
+                  <div className="w-32 h-32 mx-auto rounded-full overflow-hidden border-4 border-emerald-500/50 group-hover:border-blue-500/50 transition-all duration-300 bg-gradient-to-br from-blue-600 to-emerald-600 flex items-center justify-center">
+                    {member.image ? (
+                      <img 
+                        src={member.image} 
+                        alt={member.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-white text-4xl font-bold">
+                        {member.initials}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Info */}
+                <div className="text-center">
+                  <h3 className="text-xl font-bold text-white mb-2 group-hover:text-emerald-400 transition-colors">
+                    {member.name}
+                  </h3>
+                  <p className="text-gray-400 text-sm group-hover:text-gray-300 transition-colors">
+                    {member.role}
+                  </p>
+                </div>
+
+                {/* Decorative element */}
+                <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-emerald-500/10 to-transparent rounded-tr-2xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* How It Works Section */}
+      <section className="py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
