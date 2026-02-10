@@ -6,6 +6,7 @@ import Layout from './components/Layout';
 // Pages
 import Home from './pages/Home';
 import About from './pages/About';
+import Dashboard from './pages/Dashboard';
 import Diagnosis from './pages/Diagnosis';
 import Results from './pages/Results';
 import Login from './auth/Login';
@@ -25,6 +26,14 @@ function App() {
 
             {/* Protected routes with Layout */}
             <Route element={<Layout />}>
+              <Route
+                path="/dashboard"
+                element={
+                  <ProtectedRoute>
+                    <Dashboard />
+                  </ProtectedRoute>
+                }
+              />
               <Route
                 path="/diagnosis"
                 element={

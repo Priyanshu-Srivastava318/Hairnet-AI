@@ -1,191 +1,163 @@
-// Storage utility - can be easily swapped with Supabase/Firebase
-// Currently using localStorage with data persistence
+import { supabase } from './supabaseClient';
 
-const STORAGE_KEYS = {
-  USER_DATA: 'haircare_user_data',
-  ANALYSIS_RESULTS: 'haircare_analysis_results',
-  USER_PROFILE: 'haircare_user_profile',
-  PROGRESS_TRACKING: 'haircare_progress'
+// Save user analysis to Supabase
+export const saveAnalysisResults = async (userData, analysisResults) => {
+  try {
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
+    // Insert analysis into database
+    const { data, error } = await supabase
+      .from('analyses')
+      .insert({
+        user_id: user.id,
+        user_data: userData,
+        analysis_results: analysisResults
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Also save to sessionStorage for immediate access
+    sessionStorage.setItem('currentAnalysis', JSON.stringify(analysisResults));
+    sessionStorage.setItem('latestAnalysisId', data.id);
+
+    return data;
+  } catch (error) {
+    console.error('Error saving analysis:', error);
+    
+    // Fallback to localStorage if Supabase fails
+    localStorage.setItem('latestAnalysis', JSON.stringify({
+      userData,
+      analysisResults,
+      timestamp: new Date().toISOString()
+    }));
+    
+    sessionStorage.setItem('currentAnalysis', JSON.stringify(analysisResults));
+    
+    throw error;
+  }
 };
 
-class StorageManager {
-  // Save user data
-  saveUserData(data) {
-    try {
-      localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify({
-        ...data,
-        timestamp: new Date().toISOString()
-      }));
-      return { success: true };
-    } catch (error) {
-      console.error('Error saving user data:', error);
-      return { success: false, error: error.message };
+// Get latest analysis (for current session or from Supabase)
+export const getLatestAnalysis = async () => {
+  try {
+    // First check sessionStorage (for current session)
+    const sessionAnalysis = sessionStorage.getItem('currentAnalysis');
+    if (sessionAnalysis) {
+      return JSON.parse(sessionAnalysis);
     }
-  }
 
-  // Get user data
-  getUserData() {
-    try {
-      const data = localStorage.getItem(STORAGE_KEYS.USER_DATA);
-      return data ? JSON.parse(data) : null;
-    } catch (error) {
-      console.error('Error retrieving user data:', error);
+    // Then check Supabase for most recent
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      // If not logged in, check localStorage as fallback
+      const localAnalysis = localStorage.getItem('latestAnalysis');
+      if (localAnalysis) {
+        const parsed = JSON.parse(localAnalysis);
+        return parsed.analysisResults;
+      }
       return null;
     }
-  }
 
-  // Save analysis results
-  saveAnalysisResults(results) {
-    try {
-      const existing = this.getAllAnalysisResults();
-      const updated = [
-        {
-          ...results,
-          id: Date.now(),
-          date: new Date().toISOString()
-        },
-        ...existing
-      ].slice(0, 10); // Keep last 10 analyses
+    const { data, error } = await supabase
+      .from('analyses')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
 
-      localStorage.setItem(STORAGE_KEYS.ANALYSIS_RESULTS, JSON.stringify(updated));
-      return { success: true, id: Date.now() };
-    } catch (error) {
-      console.error('Error saving analysis results:', error);
-      return { success: false, error: error.message };
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // No analyses found
+        return null;
+      }
+      throw error;
     }
-  }
 
-  // Get all analysis results
-  getAllAnalysisResults() {
-    try {
-      const data = localStorage.getItem(STORAGE_KEYS.ANALYSIS_RESULTS);
-      return data ? JSON.parse(data) : [];
-    } catch (error) {
-      console.error('Error retrieving analysis results:', error);
+    // Cache in sessionStorage
+    if (data) {
+      sessionStorage.setItem('currentAnalysis', JSON.stringify(data.analysis_results));
+      return data.analysis_results;
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Error getting latest analysis:', error);
+    
+    // Fallback to localStorage
+    const localAnalysis = localStorage.getItem('latestAnalysis');
+    if (localAnalysis) {
+      const parsed = JSON.parse(localAnalysis);
+      return parsed.analysisResults;
+    }
+    
+    return null;
+  }
+};
+
+// Get all user analyses
+export const getAllAnalyses = async () => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
       return [];
     }
-  }
 
-  // Get latest analysis
-  getLatestAnalysis() {
-    const results = this.getAllAnalysisResults();
-    return results.length > 0 ? results[0] : null;
-  }
+    const { data, error } = await supabase
+      .from('analyses')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
 
-  // Save user profile
-  saveUserProfile(profile) {
-    try {
-      localStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(profile));
-      return { success: true };
-    } catch (error) {
-      console.error('Error saving user profile:', error);
-      return { success: false, error: error.message };
+    if (error) throw error;
+
+    return data || [];
+  } catch (error) {
+    console.error('Error getting all analyses:', error);
+    return [];
+  }
+};
+
+// Delete an analysis
+export const deleteAnalysis = async (analysisId) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      throw new Error('User not authenticated');
     }
+
+    const { error } = await supabase
+      .from('analyses')
+      .delete()
+      .eq('id', analysisId)
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+
+    return true;
+  } catch (error) {
+    console.error('Error deleting analysis:', error);
+    throw error;
   }
+};
 
-  // Get user profile
-  getUserProfile() {
-    try {
-      const data = localStorage.getItem(STORAGE_KEYS.USER_PROFILE);
-      return data ? JSON.parse(data) : null;
-    } catch (error) {
-      console.error('Error retrieving user profile:', error);
-      return null;
-    }
-  }
+// Save user data (deprecated - keeping for backward compatibility)
+export const saveUserData = (userData) => {
+  localStorage.setItem('userData', JSON.stringify(userData));
+};
 
-  // Track progress
-  saveProgress(progressData) {
-    try {
-      const existing = this.getProgressHistory();
-      const updated = [
-        {
-          ...progressData,
-          timestamp: new Date().toISOString()
-        },
-        ...existing
-      ];
-
-      localStorage.setItem(STORAGE_KEYS.PROGRESS_TRACKING, JSON.stringify(updated));
-      return { success: true };
-    } catch (error) {
-      console.error('Error saving progress:', error);
-      return { success: false, error: error.message };
-    }
-  }
-
-  // Get progress history
-  getProgressHistory() {
-    try {
-      const data = localStorage.getItem(STORAGE_KEYS.PROGRESS_TRACKING);
-      return data ? JSON.parse(data) : [];
-    } catch (error) {
-      console.error('Error retrieving progress history:', error);
-      return [];
-    }
-  }
-
-  // Clear all data
-  clearAllData() {
-    Object.values(STORAGE_KEYS).forEach(key => {
-      localStorage.removeItem(key);
-    });
-    return { success: true };
-  }
-
-  // Export data (for backup or migration to cloud)
-  exportData() {
-    return {
-      userData: this.getUserData(),
-      analysisResults: this.getAllAnalysisResults(),
-      userProfile: this.getUserProfile(),
-      progressHistory: this.getProgressHistory(),
-      exportDate: new Date().toISOString()
-    };
-  }
-
-  // Import data
-  importData(data) {
-    try {
-      if (data.userData) this.saveUserData(data.userData);
-      if (data.userProfile) this.saveUserProfile(data.userProfile);
-      if (data.analysisResults) {
-        localStorage.setItem(STORAGE_KEYS.ANALYSIS_RESULTS, JSON.stringify(data.analysisResults));
-      }
-      if (data.progressHistory) {
-        localStorage.setItem(STORAGE_KEYS.PROGRESS_TRACKING, JSON.stringify(data.progressHistory));
-      }
-      return { success: true };
-    } catch (error) {
-      console.error('Error importing data:', error);
-      return { success: false, error: error.message };
-    }
-  }
-}
-
-export const storage = new StorageManager();
-
-// Helper functions for quick access
-export const saveUserData = (data) => storage.saveUserData(data);
-export const getUserData = () => storage.getUserData();
-export const saveAnalysisResults = (results) => storage.saveAnalysisResults(results);
-export const getLatestAnalysis = () => storage.getLatestAnalysis();
-export const getAllAnalysisResults = () => storage.getAllAnalysisResults();
-
-/*
- * MIGRATION TO SUPABASE/FIREBASE:
- * 
- * To migrate to cloud storage, create a new file 'cloudStorage.js' and implement:
- * 
- * 1. For Supabase:
- *    - Install: npm install @supabase/supabase-js
- *    - Initialize client with your project URL and anon key
- *    - Replace localStorage calls with supabase.from('table_name').insert/select
- * 
- * 2. For Firebase:
- *    - Install: npm install firebase
- *    - Initialize with your config
- *    - Replace localStorage with Firestore calls
- * 
- * 3. Keep same function signatures for easy drop-in replacement
- */
+// Get user data (deprecated - keeping for backward compatibility)
+export const getUserData = () => {
+  const data = localStorage.getItem('userData');
+  return data ? JSON.parse(data) : null;
+};

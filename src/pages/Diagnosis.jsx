@@ -1,11 +1,9 @@
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Home, ChevronRight, ChevronLeft } from 'lucide-react';
 import { analyzeHairHealth } from '../utils/mlAnalyzer';
-import { saveUserData, saveAnalysisResults } from '../utils/storage';
+import { saveAnalysisResults } from '../utils/storage';
 
-// Step components
+// Import all form components
 import BasicInfo from '../components/diagnosis/BasicInfo';
 import LifestyleInfo from '../components/diagnosis/LifestyleInfo';
 import HealthHistory from '../components/diagnosis/HealthHistory';
@@ -13,152 +11,122 @@ import DietInfo from '../components/diagnosis/DietInfo';
 import ScalpImages from '../components/diagnosis/ScalpImages';
 import Review from '../components/diagnosis/Review';
 
-const TOTAL_STEPS = 6;
-
 const Diagnosis = () => {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  
+
   const [formData, setFormData] = useState({
-    basicInfo: {  // Changed from 'basic' to 'basicInfo' for consistency
+    basicInfo: {
       fullName: '',
       age: '',
       gender: '',
       email: '',
-      phone: '',  
       weight: '',
       height: '',
-      dietPreference: 'non-vegetarian'  // Added default
+      dietPreference: 'non-vegetarian'
     },
     lifestyle: {
       sleepHours: 7,
-      stressLevel: 'medium',
-      activityLevel: 'moderate',
+      stressLevel: 'moderate',
       smoking: 'no',
-      alcohol: 'occasional',
+      activityLevel: 'moderate',
       waterIntake: 2
     },
     health: {
       thyroid: 'no',
       anemia: 'no',
       hormonal: 'no',
-      diabetes: 'no',
-      medications: [],
-      otherConditions: ''
+      medications: []
     },
     diet: {
-      mealFrequency: 3,
+      mealsPerDay: 3,
       proteinSources: [],
       vegetables: 'moderate',
       fruits: 'moderate',
       processedFoods: 'low',
-      ironRichFoods: true,
-      fishOilOrNuts: 'yes',
-      biotin: 'moderate',
-      supplements: [],
-      b12Intake: 'sometimes'  // Added for vegetarians
+      ironRichFoods: false,
+      fishOilOrNuts: 'sometimes',
+      b12Intake: 'sometimes'
     },
     scalpImages: []
   });
 
+  const totalSteps = 6;
+
   const updateFormData = (section, data) => {
+    console.log('Updating section:', section, 'with data:', data);
     setFormData(prev => ({
       ...prev,
       [section]: { ...prev[section], ...data }
     }));
-    
-    // Debug log
-    console.log(`📝 Updated ${section}:`, data);
-    console.log('📊 Full formData:', { ...formData, [section]: { ...formData[section], ...data } });
   };
 
   const handleNext = () => {
-    if (currentStep < TOTAL_STEPS) {
-      setCurrentStep(prev => prev + 1);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (currentStep < totalSteps) {
+      setCurrentStep(currentStep + 1);
     }
   };
 
   const handlePrevious = () => {
     if (currentStep > 1) {
-      setCurrentStep(prev => prev - 1);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      setCurrentStep(currentStep - 1);
     }
   };
 
-  const handleAnalyze = async () => {
+  const handleSubmit = async () => {
     setIsAnalyzing(true);
-    
-    // Save user data
-    saveUserData(formData);
-    
-    // Simulate processing time for realism
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Run analysis
-    const results = analyzeHairHealth(formData);
-    
-    // Save results
-    saveAnalysisResults(results);
-    
-    // Navigate to results
-    navigate('/results');
-  };
 
-  const progressPercentage = Math.round((currentStep / TOTAL_STEPS) * 100);
+    try {
+      console.log('Generating analysis with form data:', formData);
+      
+      // Generate AI analysis
+      const analysisResults = analyzeHairHealth(formData);
+      console.log('Analysis results:', analysisResults);
 
-  const renderStep = () => {
-    switch (currentStep) {
-      case 1:
-        return <BasicInfo 
-          data={formData.basicInfo} 
-          onChange={(data) => updateFormData('basicInfo', data)} 
-        />;
-      case 2:
-        return <LifestyleInfo 
-          data={formData.lifestyle} 
-          onChange={(data) => updateFormData('lifestyle', data)} 
-        />;
-      case 3:
-        return <HealthHistory 
-          data={formData.health} 
-          onChange={(data) => updateFormData('health', data)} 
-        />;
-      case 4:
-        return <DietInfo 
-          data={formData.diet} 
-          onChange={(data) => updateFormData('diet', data)}
-          formData={formData}  // ⬅️ FIXED: Added formData prop
-        />;
-      case 5:
-        return <ScalpImages 
-          data={formData.scalpImages} 
-          onChange={(images) => setFormData(prev => ({ ...prev, scalpImages: images }))}
-        />;
-      case 6:
-        return <Review formData={formData} />;
-      default:
-        return null;
+      // Save to Supabase (analysis only, skip form_submissions for now)
+      try {
+        await saveAnalysisResults(formData, analysisResults);
+        console.log('Analysis saved successfully');
+      } catch (saveError) {
+        console.error('Error saving to Supabase:', saveError);
+        // Continue anyway - save to sessionStorage as fallback
+      }
+
+      // Store in sessionStorage for immediate access
+      sessionStorage.setItem('userData', JSON.stringify(formData));
+      sessionStorage.setItem('currentAnalysis', JSON.stringify(analysisResults));
+
+      // Navigate to results
+      setTimeout(() => {
+        navigate('/results');
+      }, 1000);
+
+    } catch (error) {
+      console.error('Error during analysis:', error);
+      alert('Failed to generate analysis. Please try again.');
+      setIsAnalyzing(false);
     }
   };
 
   const isStepValid = () => {
     switch (currentStep) {
       case 1:
-        return formData.basicInfo.fullName && 
-               formData.basicInfo.age && 
-               formData.basicInfo.gender && 
-               formData.basicInfo.email && 
-               formData.basicInfo.phone &&
-               formData.basicInfo.weight && 
+        return formData.basicInfo.fullName &&
+               formData.basicInfo.age &&
+               formData.basicInfo.gender &&
+               formData.basicInfo.email &&
+               formData.basicInfo.weight &&
                formData.basicInfo.height &&
-               formData.basicInfo.dietPreference;  // Added diet preference validation
+               formData.basicInfo.dietPreference;
       case 2:
+        return true;
       case 3:
+        return true;
       case 4:
+        return formData.diet.proteinSources.length > 0;
       case 5:
-        return true; // These steps have default values
+        return true;
       case 6:
         return true;
       default:
@@ -166,108 +134,117 @@ const Diagnosis = () => {
     }
   };
 
+  const renderStep = () => {
+    switch (currentStep) {
+      case 1:
+        return (
+          <BasicInfo
+            data={formData.basicInfo}
+            onChange={(data) => updateFormData('basicInfo', data)}
+          />
+        );
+      case 2:
+        return (
+          <LifestyleInfo
+            data={formData.lifestyle}
+            onChange={(data) => updateFormData('lifestyle', data)}
+          />
+        );
+      case 3:
+        return (
+          <HealthHistory
+            data={formData.health}
+            onChange={(data) => updateFormData('health', data)}
+          />
+        );
+      case 4:
+        return (
+          <DietInfo
+            data={formData.diet}
+            onChange={(data) => updateFormData('diet', data)}
+            formData={formData}
+          />
+        );
+      case 5:
+        return (
+          <ScalpImages
+            data={formData.scalpImages}
+            onChange={(images) => updateFormData('scalpImages', images)}
+          />
+        );
+      case 6:
+        return <Review formData={formData} />;
+      default:
+        return null;
+    }
+  };
+
+  if (isAnalyzing) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-20 h-20 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
+          <h2 className="text-2xl font-bold text-white mb-2">Analyzing Your Data...</h2>
+          <p className="text-gray-400">Our AI is processing your information</p>
+          <div className="mt-4 flex justify-center gap-2">
+            <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
+            <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+            <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen py-12 px-4">
       <div className="max-w-4xl mx-auto">
-        {/* Header */}
+        {/* Progress Bar */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
-            <button
-              onClick={() => navigate('/')}
-              className="flex items-center gap-2 text-gray-400 hover:text-primary-400 transition-colors"
-            >
-              <Home size={20} />
-              <span>Back to Home</span>
-            </button>
-            <div className="text-primary-400 font-medium">
-              Step {currentStep} of {TOTAL_STEPS}
-            </div>
+            <h2 className="text-xl font-bold text-white">Step {currentStep} of {totalSteps}</h2>
+            <span className="text-sm text-gray-400">{Math.round((currentStep / totalSteps) * 100)}% Complete</span>
           </div>
-
-          {/* Progress Bar */}
-          <div className="relative">
-            <div className="h-2 bg-navy-700 rounded-full overflow-hidden">
-              <motion.div
-                className="h-full progress-bar"
-                initial={{ width: 0 }}
-                animate={{ width: `${progressPercentage}%` }}
-                transition={{ duration: 0.5 }}
-              />
-            </div>
-            <div className="absolute -top-1 right-0 text-sm text-primary-400 font-medium">
-              {progressPercentage}% Complete
-            </div>
+          <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 transition-all duration-500"
+              style={{ width: `${(currentStep / totalSteps) * 100}%` }}
+            ></div>
           </div>
         </div>
 
-        {/* Step Content */}
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={currentStep}
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            transition={{ duration: 0.3 }}
-            className="card p-8 mb-8"
-          >
-            {renderStep()}
-          </motion.div>
-        </AnimatePresence>
+        {/* Form Content */}
+        <div className="bg-gradient-to-br from-blue-900/30 to-emerald-900/30 backdrop-blur-sm rounded-2xl p-8 border border-emerald-700/20 mb-6">
+          {renderStep()}
+        </div>
 
         {/* Navigation Buttons */}
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between">
           <button
             onClick={handlePrevious}
             disabled={currentStep === 1}
-            className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all ${
-              currentStep === 1
-                ? 'bg-navy-700 text-gray-500 cursor-not-allowed'
-                : 'btn-secondary'
-            }`}
+            className="px-6 py-3 bg-slate-800/50 hover:bg-slate-700/50 disabled:bg-slate-800/30 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all border border-emerald-700/30"
           >
-            <ChevronLeft size={20} />
             Previous
           </button>
 
-          {currentStep < TOTAL_STEPS ? (
+          {currentStep < totalSteps ? (
             <button
               onClick={handleNext}
               disabled={!isStepValid()}
-              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all ${
-                !isStepValid()
-                  ? 'bg-navy-700 text-gray-500 cursor-not-allowed'
-                  : 'btn-primary'
-              }`}
+              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-700 hover:to-emerald-700 disabled:from-slate-700 disabled:to-slate-700 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all"
             >
-              Next Step
-              <ChevronRight size={20} />
+              Next
             </button>
           ) : (
             <button
-              onClick={handleAnalyze}
-              disabled={isAnalyzing}
-              className="btn-primary px-8 py-4 text-lg flex items-center gap-2"
+              onClick={handleSubmit}
+              disabled={!isStepValid() || isAnalyzing}
+              className="px-8 py-3 bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-700 hover:to-emerald-700 disabled:from-slate-700 disabled:to-slate-700 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all"
             >
-              {isAnalyzing ? (
-                <>
-                  <div className="loading-spinner w-5 h-5"></div>
-                  Analyzing...
-                </>
-              ) : (
-                <>
-                  Generate Analysis
-                  <ChevronRight size={20} />
-                </>
-              )}
+              Generate Analysis
             </button>
           )}
-        </div>
-
-        {/* Help Text */}
-        <div className="mt-8 text-center">
-          <p className="text-gray-400 text-sm">
-            Your data is encrypted and stored securely. We never share your information.
-          </p>
         </div>
       </div>
     </div>

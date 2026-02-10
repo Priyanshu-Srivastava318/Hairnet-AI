@@ -52,6 +52,18 @@ const Navigation = () => {
             >
               About
             </Link>
+            {user && (
+              <Link
+                to="/dashboard"
+                className={`transition-colors ${
+                  isActive('/dashboard')
+                    ? 'text-white font-semibold border-b-2 border-emerald-400'
+                    : 'text-gray-300 hover:text-white'
+                }`}
+              >
+                Dashboard
+              </Link>
+            )}
             <Link
               to="/diagnosis"
               className={`transition-colors ${
@@ -136,6 +148,19 @@ const Navigation = () => {
             >
               About
             </Link>
+            {user && (
+              <Link
+                to="/dashboard"
+                onClick={() => setIsOpen(false)}
+                className={`block px-4 py-2 rounded-lg transition-colors ${
+                  isActive('/dashboard')
+                    ? 'bg-emerald-900/30 text-white font-semibold'
+                    : 'text-gray-300 hover:bg-slate-800/50'
+                }`}
+              >
+                Dashboard
+              </Link>
+            )}
             <Link
               to="/diagnosis"
               onClick={() => setIsOpen(false)}

@@ -1,24 +1,26 @@
-import { Upload, Camera, X, CheckCircle, AlertCircle } from 'lucide-react';
+import { Upload, Camera, X, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 import { useState } from 'react';
+import { supabase } from '../../utils/supabaseClient';
 
 const ScalpImages = ({ data, onChange }) => {
   const [previews, setPreviews] = useState([]);
   const [uploadStatus, setUploadStatus] = useState('idle'); // idle, uploading, success, error
   const [errorMessage, setErrorMessage] = useState('');
+  const [uploadProgress, setUploadProgress] = useState(0);
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const files = Array.from(e.target.files);
     
     // Validation
     const maxSize = 10 * 1024 * 1024; // 10MB
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/heic'];
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/heic', 'image/webp'];
     
     const validFiles = [];
     const errors = [];
 
     files.forEach(file => {
       if (!allowedTypes.includes(file.type)) {
-        errors.push(`${file.name}: Invalid format (only JPG, PNG, HEIC allowed)`);
+        errors.push(`${file.name}: Invalid format (only JPG, PNG, HEIC, WEBP allowed)`);
       } else if (file.size > maxSize) {
         errors.push(`${file.name}: File too large (max 10MB)`);
       } else {
@@ -40,28 +42,96 @@ const ScalpImages = ({ data, onChange }) => {
 
     // Set uploading status
     setUploadStatus('uploading');
-    
-    // Create previews
-    const newPreviews = validFiles.map(file => ({
-      url: URL.createObjectURL(file),
-      name: file.name,
-      size: file.size
-    }));
-    
-    // Simulate upload delay (remove in production)
-    setTimeout(() => {
+    setUploadProgress(0);
+
+    try {
+      // Upload to Supabase Storage
+      const uploadedUrls = await uploadToSupabase(validFiles);
+      
+      // Create local previews
+      const newPreviews = validFiles.map((file, index) => ({
+        url: URL.createObjectURL(file),
+        name: file.name,
+        size: file.size,
+        supabaseUrl: uploadedUrls[index]
+      }));
+      
       setPreviews([...previews, ...newPreviews]);
-      onChange([...data, ...validFiles.map(f => f.name)]);
+      onChange([...data, ...uploadedUrls]);
       setUploadStatus('success');
       
       // Reset success message after 3 seconds
       setTimeout(() => {
         setUploadStatus('idle');
       }, 3000);
-    }, 1000);
+    } catch (error) {
+      console.error('Upload error:', error);
+      setUploadStatus('error');
+      setErrorMessage(error.message || 'Failed to upload images. Please try again.');
+      
+      setTimeout(() => {
+        setUploadStatus('idle');
+        setErrorMessage('');
+      }, 5000);
+    }
   };
 
-  const removeImage = (index) => {
+  const uploadToSupabase = async (files) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      throw new Error('You must be logged in to upload images');
+    }
+
+    const uploadPromises = files.map(async (file, index) => {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/${Date.now()}_${index}.${fileExt}`;
+      
+      const { data, error } = await supabase.storage
+        .from('scalp-images')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (error) {
+        console.error('Supabase upload error:', error);
+        throw new Error(`Failed to upload ${file.name}`);
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('scalp-images')
+        .getPublicUrl(fileName);
+
+      setUploadProgress(prev => prev + (100 / files.length));
+
+      return publicUrl;
+    });
+
+    const urls = await Promise.all(uploadPromises);
+    return urls;
+  };
+
+  const removeImage = async (index) => {
+    const imageToRemove = previews[index];
+    
+    // Remove from Supabase if URL exists
+    if (imageToRemove.supabaseUrl) {
+      try {
+        // Extract file path from URL
+        const urlParts = imageToRemove.supabaseUrl.split('/scalp-images/');
+        if (urlParts.length > 1) {
+          const filePath = urlParts[1];
+          await supabase.storage
+            .from('scalp-images')
+            .remove([filePath]);
+        }
+      } catch (error) {
+        console.error('Error deleting image:', error);
+      }
+    }
+
     const newPreviews = previews.filter((_, i) => i !== index);
     const newData = data.filter((_, i) => i !== index);
     setPreviews(newPreviews);
@@ -78,20 +148,21 @@ const ScalpImages = ({ data, onChange }) => {
 
   return (
     <div>
-      <h2 className="text-3xl font-display font-bold mb-2 text-white">Scalp Images (Optional)</h2>
-      <p className="text-gray-400 mb-8">
-        Upload clear images of your scalp for visual analysis. This helps our AI assess hair density, 
-        scalp condition, and visible patterns.
+      <h2 className="text-2xl font-bold mb-1 bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
+        Scalp Images (Optional)
+      </h2>
+      <p className="text-gray-400 text-sm mb-5">
+        Upload clear images of your scalp for enhanced visual analysis
       </p>
 
-      <div className="space-y-6">
+      <div className="space-y-5">
         {/* Upload Status Messages */}
         {uploadStatus === 'success' && (
           <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 flex items-start gap-3">
             <CheckCircle className="text-green-400 flex-shrink-0" size={20} />
             <div>
               <p className="text-green-300 font-medium">Images uploaded successfully!</p>
-              <p className="text-green-400/70 text-sm mt-1">{previews.length} image(s) ready for analysis</p>
+              <p className="text-green-400/70 text-sm mt-1">{previews.length} image(s) saved to cloud storage</p>
             </div>
           </div>
         )}
@@ -109,13 +180,13 @@ const ScalpImages = ({ data, onChange }) => {
         {/* Upload Area */}
         <div className={`border-2 border-dashed rounded-xl p-8 text-center transition-all ${
           uploadStatus === 'uploading' 
-            ? 'border-primary-500 bg-primary-500/5' 
-            : 'border-navy-600 hover:border-primary-500'
+            ? 'border-emerald-500 bg-emerald-500/5' 
+            : 'border-slate-700 hover:border-emerald-500/50'
         }`}>
           <label className="cursor-pointer block">
             <input
               type="file"
-              accept="image/jpeg,image/jpg,image/png,image/heic"
+              accept="image/jpeg,image/jpg,image/png,image/heic,image/webp"
               multiple
               onChange={handleFileChange}
               className="hidden"
@@ -124,29 +195,45 @@ const ScalpImages = ({ data, onChange }) => {
             <div className="flex flex-col items-center gap-4">
               <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
                 uploadStatus === 'uploading' 
-                  ? 'bg-primary-500/30 animate-pulse' 
-                  : 'bg-primary-500/20'
+                  ? 'bg-emerald-500/30' 
+                  : 'bg-emerald-500/20'
               }`}>
-                <Upload className="text-primary-400" size={32} />
+                {uploadStatus === 'uploading' ? (
+                  <Loader className="text-emerald-400 animate-spin" size={32} />
+                ) : (
+                  <Upload className="text-emerald-400" size={32} />
+                )}
               </div>
               <div>
                 <p className="text-lg font-medium text-white mb-1">
-                  {uploadStatus === 'uploading' ? 'Uploading...' : 'Click to upload or drag and drop'}
+                  {uploadStatus === 'uploading' ? `Uploading... ${Math.round(uploadProgress)}%` : 'Click to upload or drag and drop'}
                 </p>
                 <p className="text-sm text-gray-400">
-                  PNG, JPG or HEIC (Max 10MB per image)
+                  PNG, JPG, HEIC, WEBP (Max 10MB per image)
                 </p>
               </div>
               <button 
                 type="button"
-                className="btn-primary"
+                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-700 hover:to-emerald-700 disabled:from-slate-700 disabled:to-slate-700 text-white font-semibold rounded-lg transition-all"
                 disabled={uploadStatus === 'uploading'}
               >
-                <Camera className="inline mr-2" size={18} />
+                <Camera size={18} />
                 {uploadStatus === 'uploading' ? 'Uploading...' : 'Select Images'}
               </button>
             </div>
           </label>
+
+          {/* Progress Bar */}
+          {uploadStatus === 'uploading' && (
+            <div className="mt-4">
+              <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 transition-all duration-300"
+                  style={{ width: `${uploadProgress}%` }}
+                ></div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Image Previews */}
@@ -158,7 +245,7 @@ const ScalpImages = ({ data, onChange }) => {
               </h3>
               <div className="flex items-center gap-2 text-sm text-green-400">
                 <CheckCircle size={16} />
-                <span>Ready for analysis</span>
+                <span>Saved to cloud</span>
               </div>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -168,7 +255,7 @@ const ScalpImages = ({ data, onChange }) => {
                     <img
                       src={preview.url}
                       alt={`Scalp ${index + 1}`}
-                      className="w-full h-48 object-cover rounded-lg border-2 border-navy-600 group-hover:border-primary-500 transition-colors"
+                      className="w-full h-48 object-cover rounded-lg border-2 border-slate-700 group-hover:border-emerald-500 transition-colors"
                     />
                     <button
                       type="button"
@@ -189,45 +276,32 @@ const ScalpImages = ({ data, onChange }) => {
         )}
 
         {/* Guidelines */}
-        <div className="bg-navy-800/50 rounded-lg p-6 border border-navy-600">
-          <h3 className="font-medium text-white mb-3">📸 Image Guidelines for Best Results</h3>
-          <ul className="space-y-2 text-sm text-gray-400">
+        <div className="bg-gradient-to-r from-blue-900/20 to-emerald-900/20 border border-emerald-700/30 rounded-lg p-4">
+          <h3 className="font-medium text-white mb-3 text-sm">📸 Image Guidelines for Best Results</h3>
+          <ul className="space-y-2 text-xs text-gray-400">
             <li className="flex items-start gap-2">
-              <span className="text-primary-400">•</span>
+              <span className="text-emerald-400">•</span>
               <span>Take photos in good natural lighting</span>
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-primary-400">•</span>
+              <span className="text-emerald-400">•</span>
               <span>Include multiple angles: top, crown, hairline</span>
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-primary-400">•</span>
+              <span className="text-emerald-400">•</span>
               <span>Part your hair to show scalp clearly</span>
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-primary-400">•</span>
+              <span className="text-emerald-400">•</span>
               <span>Ensure images are in focus and well-lit</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-primary-400">•</span>
-              <span>Accepted formats: JPG, PNG, HEIC (max 10MB each)</span>
             </li>
           </ul>
         </div>
 
         {/* Privacy Note */}
-        <div className="bg-primary-500/10 border border-primary-500/30 rounded-lg p-4">
-          <p className="text-sm text-gray-300">
-            <strong className="text-primary-400">🔒 Privacy:</strong> Your images are processed securely 
-            and never shared. They're used solely for your personalized analysis.
-          </p>
-        </div>
-
-        {/* Skip Option */}
-        <div className="text-center">
-          <p className="text-gray-400 text-sm">
-            Don't have images handy? No problem! You can skip this step and still get valuable insights 
-            based on your health and lifestyle data.
+        <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+          <p className="text-xs text-gray-300">
+            <strong className="text-blue-400">🔒 Privacy:</strong> Images are encrypted and stored securely in our cloud storage. Only you can access them.
           </p>
         </div>
       </div>
