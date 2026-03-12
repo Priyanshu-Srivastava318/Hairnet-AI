@@ -10,7 +10,6 @@ export const saveAnalysisResults = async (userData, analysisResults) => {
       throw new Error('User not authenticated');
     }
 
-    // Insert analysis into database
     const { data, error } = await supabase
       .from('analyses')
       .insert({
@@ -21,26 +20,32 @@ export const saveAnalysisResults = async (userData, analysisResults) => {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.warn('Supabase insert warning:', error.message);
+      
+      // Fallback to sessionStorage
+      sessionStorage.setItem('currentAnalysis', JSON.stringify(analysisResults));
+      sessionStorage.setItem('userData', JSON.stringify(userData));
+      
+      return { success: true, source: 'sessionStorage' };
+    }
 
-    // Also save to sessionStorage for immediate access
+    // Success - save to sessionStorage too
     sessionStorage.setItem('currentAnalysis', JSON.stringify(analysisResults));
     sessionStorage.setItem('latestAnalysisId', data.id);
 
-    return data;
+    // Notify Dashboard to refresh
+    window.dispatchEvent(new CustomEvent('analysisAdded'));
+
+    return { success: true, source: 'supabase', data };
   } catch (error) {
     console.error('Error saving analysis:', error);
     
-    // Fallback to localStorage if Supabase fails
-    localStorage.setItem('latestAnalysis', JSON.stringify({
-      userData,
-      analysisResults,
-      timestamp: new Date().toISOString()
-    }));
-    
+    // Fallback to sessionStorage
     sessionStorage.setItem('currentAnalysis', JSON.stringify(analysisResults));
+    sessionStorage.setItem('userData', JSON.stringify(userData));
     
-    throw error;
+    return { success: true, source: 'sessionStorage' };
   }
 };
 
@@ -56,15 +61,7 @@ export const getLatestAnalysis = async () => {
     // Then check Supabase for most recent
     const { data: { user } } = await supabase.auth.getUser();
     
-    if (!user) {
-      // If not logged in, check localStorage as fallback
-      const localAnalysis = localStorage.getItem('latestAnalysis');
-      if (localAnalysis) {
-        const parsed = JSON.parse(localAnalysis);
-        return parsed.analysisResults;
-      }
-      return null;
-    }
+    if (!user) return null;
 
     const { data, error } = await supabase
       .from('analyses')
@@ -75,14 +72,10 @@ export const getLatestAnalysis = async () => {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') {
-        // No analyses found
-        return null;
-      }
+      if (error.code === 'PGRST116') return null; // No analyses found
       throw error;
     }
 
-    // Cache in sessionStorage
     if (data) {
       sessionStorage.setItem('currentAnalysis', JSON.stringify(data.analysis_results));
       return data.analysis_results;
@@ -91,14 +84,6 @@ export const getLatestAnalysis = async () => {
     return null;
   } catch (error) {
     console.error('Error getting latest analysis:', error);
-    
-    // Fallback to localStorage
-    const localAnalysis = localStorage.getItem('latestAnalysis');
-    if (localAnalysis) {
-      const parsed = JSON.parse(localAnalysis);
-      return parsed.analysisResults;
-    }
-    
     return null;
   }
 };
@@ -108,9 +93,7 @@ export const getAllAnalyses = async () => {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     
-    if (!user) {
-      return [];
-    }
+    if (!user) return [];
 
     const { data, error } = await supabase
       .from('analyses')
@@ -132,9 +115,7 @@ export const deleteAnalysis = async (analysisId) => {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     
-    if (!user) {
-      throw new Error('User not authenticated');
-    }
+    if (!user) throw new Error('User not authenticated');
 
     const { error } = await supabase
       .from('analyses')

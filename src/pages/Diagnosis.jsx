@@ -3,18 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import { analyzeHairHealth } from '../utils/mlAnalyzer';
 import { saveAnalysisResults } from '../utils/storage';
 
-// Import all form components
+// Import form components
 import BasicInfo from '../components/diagnosis/BasicInfo';
 import LifestyleInfo from '../components/diagnosis/LifestyleInfo';
 import HealthHistory from '../components/diagnosis/HealthHistory';
 import DietInfo from '../components/diagnosis/DietInfo';
-import ScalpImages from '../components/diagnosis/ScalpImages';
 import Review from '../components/diagnosis/Review';
 
 const Diagnosis = () => {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   const [formData, setFormData] = useState({
     basicInfo: {
@@ -24,14 +24,20 @@ const Diagnosis = () => {
       email: '',
       weight: '',
       height: '',
+      hairFallCount: '',
       dietPreference: 'non-vegetarian'
     },
     lifestyle: {
-      sleepHours: 7,
+      sleepHours: '',
+      sleepInterruptions: '',
+      workHours: '',
+      screenTime: '',
+      caffeineIntake: '',
+      relaxationTime: '',
       stressLevel: 'moderate',
       smoking: 'no',
       activityLevel: 'moderate',
-      waterIntake: 2
+      waterIntake: ''
     },
     health: {
       thyroid: 'no',
@@ -48,14 +54,12 @@ const Diagnosis = () => {
       ironRichFoods: false,
       fishOilOrNuts: 'sometimes',
       b12Intake: 'sometimes'
-    },
-    scalpImages: []
+    }
   });
 
-  const totalSteps = 6;
+  const totalSteps = 5;
 
   const updateFormData = (section, data) => {
-    console.log('Updating section:', section, 'with data:', data);
     setFormData(prev => ({
       ...prev,
       [section]: { ...prev[section], ...data }
@@ -63,48 +67,34 @@ const Diagnosis = () => {
   };
 
   const handleNext = () => {
-    if (currentStep < totalSteps) {
-      setCurrentStep(currentStep + 1);
-    }
+    if (currentStep < totalSteps) setCurrentStep(currentStep + 1);
   };
 
   const handlePrevious = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
-    }
+    if (currentStep > 1) setCurrentStep(currentStep - 1);
   };
 
   const handleSubmit = async () => {
     setIsAnalyzing(true);
+    setSubmitError('');
 
     try {
-      console.log('Generating analysis with form data:', formData);
-      
       // Generate AI analysis
       const analysisResults = analyzeHairHealth(formData);
-      console.log('Analysis results:', analysisResults);
 
-      // Save to Supabase (analysis only, skip form_submissions for now)
-      try {
-        await saveAnalysisResults(formData, analysisResults);
-        console.log('Analysis saved successfully');
-      } catch (saveError) {
-        console.error('Error saving to Supabase:', saveError);
-        // Continue anyway - save to sessionStorage as fallback
-      }
+      // Save to Supabase (this also dispatches 'analysisAdded' event on success)
+      await saveAnalysisResults(formData, analysisResults);
 
-      // Store in sessionStorage for immediate access
+      // Store in sessionStorage for Results page
       sessionStorage.setItem('userData', JSON.stringify(formData));
       sessionStorage.setItem('currentAnalysis', JSON.stringify(analysisResults));
 
       // Navigate to results
-      setTimeout(() => {
-        navigate('/results');
-      }, 1000);
+      navigate('/results');
 
     } catch (error) {
       console.error('Error during analysis:', error);
-      alert('Failed to generate analysis. Please try again.');
+      setSubmitError('Failed to generate analysis. Please try again.');
       setIsAnalyzing(false);
     }
   };
@@ -112,13 +102,16 @@ const Diagnosis = () => {
   const isStepValid = () => {
     switch (currentStep) {
       case 1:
-        return formData.basicInfo.fullName &&
-               formData.basicInfo.age &&
-               formData.basicInfo.gender &&
-               formData.basicInfo.email &&
-               formData.basicInfo.weight &&
-               formData.basicInfo.height &&
-               formData.basicInfo.dietPreference;
+        return (
+          formData.basicInfo.fullName &&
+          formData.basicInfo.age &&
+          formData.basicInfo.gender &&
+          formData.basicInfo.email &&
+          formData.basicInfo.weight &&
+          formData.basicInfo.height &&
+          formData.basicInfo.hairFallCount &&
+          formData.basicInfo.dietPreference
+        );
       case 2:
         return true;
       case 3:
@@ -126,8 +119,6 @@ const Diagnosis = () => {
       case 4:
         return formData.diet.proteinSources.length > 0;
       case 5:
-        return true;
-      case 6:
         return true;
       default:
         return false;
@@ -166,13 +157,6 @@ const Diagnosis = () => {
           />
         );
       case 5:
-        return (
-          <ScalpImages
-            data={formData.scalpImages}
-            onChange={(images) => updateFormData('scalpImages', images)}
-          />
-        );
-      case 6:
         return <Review formData={formData} />;
       default:
         return null;
@@ -185,7 +169,7 @@ const Diagnosis = () => {
         <div className="text-center">
           <div className="w-20 h-20 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
           <h2 className="text-2xl font-bold text-white mb-2">Analyzing Your Data...</h2>
-          <p className="text-gray-400">Our AI is processing your information</p>
+          <p className="text-gray-400">Our ML model is processing your information</p>
           <div className="mt-4 flex justify-center gap-2">
             <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
             <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
@@ -199,6 +183,7 @@ const Diagnosis = () => {
   return (
     <div className="min-h-screen py-12 px-4">
       <div className="max-w-4xl mx-auto">
+
         {/* Progress Bar */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
@@ -212,6 +197,22 @@ const Diagnosis = () => {
             ></div>
           </div>
         </div>
+
+        {/* Step Names */}
+        <div className="mb-6 flex justify-between text-xs text-gray-500">
+          <span className={currentStep === 1 ? 'text-emerald-400 font-medium' : ''}>Basic Info</span>
+          <span className={currentStep === 2 ? 'text-emerald-400 font-medium' : ''}>Lifestyle</span>
+          <span className={currentStep === 3 ? 'text-emerald-400 font-medium' : ''}>Health</span>
+          <span className={currentStep === 4 ? 'text-emerald-400 font-medium' : ''}>Diet</span>
+          <span className={currentStep === 5 ? 'text-emerald-400 font-medium' : ''}>Review</span>
+        </div>
+
+        {/* Submit Error */}
+        {submitError && (
+          <div className="mb-4 bg-red-900/30 border border-red-500/50 rounded-lg p-4">
+            <p className="text-red-300 text-sm">{submitError}</p>
+          </div>
+        )}
 
         {/* Form Content */}
         <div className="bg-gradient-to-br from-blue-900/30 to-emerald-900/30 backdrop-blur-sm rounded-2xl p-8 border border-emerald-700/20 mb-6">

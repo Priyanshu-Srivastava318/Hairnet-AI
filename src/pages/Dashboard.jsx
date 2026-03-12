@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Calendar, TrendingUp, AlertTriangle, Eye, Trash2, Plus, Loader } from 'lucide-react';
@@ -12,16 +12,14 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    fetchAnalyses();
-  }, [user]);
+  const fetchAnalyses = useCallback(async () => {
+    if (!user?.id) return; // Guard: don't fetch if user not ready
 
-  const fetchAnalyses = async () => {
     try {
       const { data, error } = await supabase
         .from('analyses')
         .select('*')
-        .eq('user_id', user?.id)
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -33,7 +31,21 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    fetchAnalyses();
+
+    // Listen for new analysis saved from Diagnosis page
+    const handleNewAnalysis = () => fetchAnalyses();
+    window.addEventListener('analysisAdded', handleNewAnalysis);
+
+    return () => {
+      window.removeEventListener('analysisAdded', handleNewAnalysis);
+    };
+  }, [user?.id, fetchAnalyses]);
 
   const deleteAnalysis = async (id) => {
     if (!confirm('Are you sure you want to delete this analysis?')) return;
@@ -47,7 +59,7 @@ const Dashboard = () => {
 
       if (error) throw error;
 
-      setAnalyses(analyses.filter(a => a.id !== id));
+      setAnalyses(prev => prev.filter(a => a.id !== id));
     } catch (err) {
       console.error('Error deleting analysis:', err);
       alert('Failed to delete analysis');
@@ -55,7 +67,6 @@ const Dashboard = () => {
   };
 
   const viewAnalysis = (analysis) => {
-    // Store in sessionStorage and navigate to results
     sessionStorage.setItem('currentAnalysis', JSON.stringify(analysis.analysis_results));
     navigate('/results');
   };
@@ -74,9 +85,9 @@ const Dashboard = () => {
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'short', 
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
@@ -97,6 +108,7 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen py-12 px-4">
       <div className="max-w-7xl mx-auto">
+
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -157,7 +169,7 @@ const Dashboard = () => {
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {analyses.map((analysis, index) => {
               const results = analysis.analysis_results;
-              
+
               return (
                 <motion.div
                   key={analysis.id}
@@ -175,13 +187,13 @@ const Dashboard = () => {
                   {/* Metrics */}
                   <div className="grid grid-cols-2 gap-4 mb-6">
                     {/* Risk Score */}
-                    <div className={`${getRiskBg(results.riskScore)} rounded-lg p-4 border`}>
+                    <div className={`${getRiskBg(results?.riskScore)} rounded-lg p-4 border`}>
                       <div className="flex items-center gap-2 mb-1">
-                        <AlertTriangle className={getRiskColor(results.riskScore)} size={16} />
+                        <AlertTriangle className={getRiskColor(results?.riskScore)} size={16} />
                         <span className="text-xs text-gray-400">Risk Score</span>
                       </div>
-                      <div className={`text-2xl font-bold ${getRiskColor(results.riskScore)}`}>
-                        {results.riskScore}
+                      <div className={`text-2xl font-bold ${getRiskColor(results?.riskScore)}`}>
+                        {results?.riskScore ?? 'N/A'}
                       </div>
                     </div>
 
@@ -192,7 +204,7 @@ const Dashboard = () => {
                         <span className="text-xs text-gray-400">BMI</span>
                       </div>
                       <div className="text-2xl font-bold text-blue-400">
-                        {results.bmi}
+                        {results?.bmi ?? 'N/A'}
                       </div>
                     </div>
                   </div>
@@ -201,9 +213,9 @@ const Dashboard = () => {
                   <div className="mb-6">
                     <h4 className="text-sm font-medium text-gray-400 mb-2">Top Issues:</h4>
                     <div className="space-y-2">
-                      {results.rootCauses.slice(0, 2).map((cause, idx) => (
+                      {(results?.rootCauses ?? []).slice(0, 2).map((cause, idx) => (
                         <div key={idx} className="flex items-center gap-2">
-                          <div className="w-2 h-2 bg-emerald-400 rounded-full"></div>
+                          <div className="w-2 h-2 bg-emerald-400 rounded-full flex-shrink-0"></div>
                           <span className="text-sm text-gray-300 truncate">{cause.cause}</span>
                         </div>
                       ))}
