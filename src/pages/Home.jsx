@@ -17,7 +17,7 @@ const Home = () => {
       image: null, // 'Mitali.png'
     },
     {
-      name: 'Niketa Sukhraliya',
+      name: 'Niketa Sukhralia',
       role: 'Full Stack Developer',
       initials: 'NS',
       image: null, // 'Niketa.png'
